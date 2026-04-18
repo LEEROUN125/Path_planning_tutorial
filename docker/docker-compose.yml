@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  path_planning:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: path_planning_sim
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    # Auto-restart when PC boots
+    restart: unless-stopped
+    # Keep container running
+    tty: true
+    stdin_open: true
+    working_dir: /project
