@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     libsfml-dev \
     python3 \
     python3-pip \
+    fonts-dejavu-core \
     x11-apps \
     libxext6 \
     libxrandr2 \

@@ -1,0 +1,40 @@
+{
+    "recommendations": [
+        "ms-vscode.cpptools"
+    ],
+    "settings": {
+        // ===== DEFAULT FORMATTER (REQUIRED) =====
+        "editor.defaultFormatter": "ms-vscode.cpptools",
+        
+        // C++20
+        "C_Cpp.default.cppStandard": "c++20",
+        "C_Cpp.default.cStandard": "c17",
+        
+        // Clang-format config
+        "C_Cpp.clang_format_sortIncludes": true,
+        "C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: Google, IndentWidth: 4, ColumnLimit: 100 }",
+        
+        // ===== FORMAT ON SAVE =====
+        "[cpp]": {
+            "editor.formatOnSave": true,
+            "editor.defaultFormatter": "ms-vscode.cpptools"
+        },
+        "[c]": {
+            "editor.formatOnSave": true,
+            "editor.defaultFormatter": "ms-vscode.cpptools"
+        },
+        
+        // File associations
+        "files.associations": {
+            "*.h": "cpp",
+            "*.hpp": "cpp"
+        },
+        
+        // Editor settings
+        "files.trimTrailingWhitespace": true,
+        "editor.rulers": [100],
+        "editor.insertSpaces": true,
+        "editor.tabSize": 4,
+        "editor.detectIndentation": false
+    }
+}

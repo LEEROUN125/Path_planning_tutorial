@@ -1,0 +1,73 @@
+# .clang-format - Google C++ Style Guide
+# Based on https://google.github.io/styleguide/cppguide.html
+
+---
+Language: Cpp
+# Based on Google Style
+BasedOnStyle: Google
+
+# Access modifiers offset (same as indent)
+AccessModifierOffset: -4
+
+# Align after opening bracket
+AlignAfterOpenBracket: Align
+
+# Align arrays of structs
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+
+# Align escaped newlines
+AlignEscapedNewlines: Left
+
+# Align operands of binary operators
+AlignOperands: true
+
+# Align trailing comments
+AlignTrailingComments: true
+
+# Allow all parameters to be on the same line
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+
+# Spaces before parentheses
+SpaceAfterCStyleCast: false
+SpaceAfterTemplateKeyword: true
+
+# Spaces before { (Google style: no spaces before brace)
+SpaceBeforeParens: ControlStatements
+
+# Brace at end of line
+BreakBeforeBraces: Attach
+
+# Column width limit
+ColumnLimit: 100
+
+# Comments formatting
+CommentPragmas: '^'
+ReflowComments: true
+
+# Include sorting
+IncludeBlocks: Preserve
+
+# Indent width
+IndentWidth: 4
+
+# Keep constructor initializer list on one line
+KeepEmptyConstructors: false
+
+# Max empty lines to keep
+MaxEmptyLinesToKeep: 1
+
+# Namespace indentation
+NamespaceIndentation: None
+
+# Tab width
+TabWidth: 4
+UseTab: Never
+
+# Pointer alignment
+PointerAlignment: Left
+
+# Reference alignment
+ReferenceAlignment: Left
