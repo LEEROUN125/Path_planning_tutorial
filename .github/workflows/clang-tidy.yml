@@ -15,7 +15,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang-tidy clang-format cmake
+        sudo apt-get install -y clang-tidy clang-format cmake libsfml-dev
 
     - name: Configure
       run: |
