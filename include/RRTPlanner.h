@@ -43,6 +43,8 @@ public:
 
     void plan(const Pose& start, const Pose& goal) override;
 
+    const std::vector<RRTNode>& getTree() const { return tree; }
+
     const char* getAlgorithmName() const override { return isOptimal ? "RRT*" : "RRT"; }
 
     void setStepSize(float size) { stepSize = size; }

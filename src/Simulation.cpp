@@ -116,6 +116,17 @@ void Simulation::replan() {
     planner->plan(start_pose, goal_pose);
 
     if (!planner->getPath().empty()) {
+        std::vector<Pose> raw_path = pathPointsToPoses(planner->getPath());
+
+        plannedPath = resamplePath(raw_path, 0.2F);
+
+        groundTruthPath = raw_path;
+        currentPathIndex = 1;
+
+        std::cout << "Planned with " << planner->getAlgorithmName() << '\n';
+        std::cout << "  Path: " << planner->getPathCost() << " m" << '\n';
+        std::cout << "  Waypoints: " << plannedPath.size() << '\n';
+
         plannedPath = pathPointsToPoses(planner->getPath());
         groundTruthPath = plannedPath;
         currentPathIndex = 1;
@@ -163,8 +174,9 @@ void Simulation::replan() {
         planner->plan(start_pose, goal_pose);
 
         if (!planner->getPath().empty()) {
-            plannedPath = pathPointsToPoses(planner->getPath());
-            groundTruthPath = plannedPath;
+            std::vector<Pose> raw_path = pathPointsToPoses(planner->getPath());
+            plannedPath = resamplePath(raw_path, 0.2F);
+            groundTruthPath = raw_path;
             currentPathIndex = 1;
         }
     }
@@ -321,6 +333,9 @@ void Simulation::handleKeyPress(sf::Keyboard::Key key) {
 
 void Simulation::reset() {
     map.generateRandomObstacles();
+    map.generateInternalWalls();
+    map.updateGrid();
+
     start_pose = Pose(1.5F, 1.5F, 0.0F);
     goal_pose = Pose(Map::width - 1.5F, Map::height - 1.5F, 0.0F);
     robot.setPose(start_pose);
@@ -360,8 +375,15 @@ void Simulation::update(float dt) {
 
     // Move forward in the direction robot is facing
     if (dist >= 0.3F) {
-        new_pose.x = current.x + Robot::linear_velocity * std::cos(new_pose.theta) * dt;
-        new_pose.y = current.y + Robot::linear_velocity * std::sin(new_pose.theta) * dt;
+        float speed_factor = std::cos(angle_diff);
+        if (speed_factor < 0.0F) {
+            speed_factor = 0.0F;
+        }
+
+        float actual_velocity = Robot::linear_velocity * speed_factor;
+
+        new_pose.x = current.x + actual_velocity * std::cos(new_pose.theta) * dt;
+        new_pose.y = current.y + actual_velocity * std::sin(new_pose.theta) * dt;
 
         // Check collision
         if (map.isValidPosition(new_pose.x, new_pose.y)) {
@@ -390,6 +412,21 @@ void Simulation::draw() {
 
     if (showGrid) {
         drawGrid();
+    }
+
+    if (auto* rrt_planner = dynamic_cast<RRTPlanner*>(planner.get())) {
+        const auto& tree = rrt_planner->getTree();
+        sf::Color tree_color(100, 220, 100, 120);
+
+        for (const auto& node : tree) {
+            if (node.parentIndex >= 0 && node.parentIndex < tree.size()) {
+                const auto& parent = tree[node.parentIndex];
+                std::array<sf::Vertex, 2> line = {
+                    sf::Vertex(poseToVector(Pose(node.x, node.y, 0)), tree_color),
+                    sf::Vertex(poseToVector(Pose(parent.x, parent.y, 0)), tree_color)};
+                window->draw(line.data(), line.size(), sf::Lines);
+            }
+        }
     }
 
     if (!groundTruthPath.empty()) {
@@ -463,48 +500,46 @@ void Simulation::drawObstacles() {
 }
 
 void Simulation::drawGrid() {
-    for (int x = 0; x <= static_cast<int>(Map::width); ++x) {
+    float cell_x = Map::getCellSizeX();
+    float cell_y = Map::getCellSizeY();
+
+    for (int i = 0; i <= Map::grid_cols; ++i) {
+        float x_pos = static_cast<float>(i) * cell_x;
         std::array<sf::Vertex, 2> line = {
-            sf::Vertex(sf::Vector2f(static_cast<float>(x) * scale + offsetX, offsetY),
+            sf::Vertex(sf::Vector2f(x_pos * scale + offsetX, offsetY),
                        sf::Color(200, 200, 200, 100)),
-            sf::Vertex(sf::Vector2f(static_cast<float>(x) * scale + offsetX,
-                                    Map::height * scale + offsetY),
+            sf::Vertex(sf::Vector2f(x_pos * scale + offsetX, Map::height * scale + offsetY),
                        sf::Color(200, 200, 200, 100))};
         window->draw(line.data(), line.size(), sf::Lines);
     }
 
-    for (int y = 0; y <= static_cast<int>(Map::height); ++y) {
+    for (int i = 0; i <= Map::grid_rows; ++i) {
+        float y_pos = static_cast<float>(i) * cell_y;
         std::array<sf::Vertex, 2> line = {
-            sf::Vertex(sf::Vector2f(offsetX, static_cast<float>(y) * scale + offsetY),
+            sf::Vertex(sf::Vector2f(offsetX, y_pos * scale + offsetY),
                        sf::Color(200, 200, 200, 100)),
-            sf::Vertex(sf::Vector2f(Map::width * scale + offsetX,
-                                    static_cast<float>(y) * scale + offsetY),
+            sf::Vertex(sf::Vector2f(Map::width * scale + offsetX, y_pos * scale + offsetY),
                        sf::Color(200, 200, 200, 100))};
         window->draw(line.data(), line.size(), sf::Lines);
     }
 }
 
 void Simulation::drawRobot(const Pose& pose) {
-    const float size = 30.0F;
-    const float front = size * 1.0F;
-    const float rear = size * 0.6F;
-    const float width = size * 0.4F;
+    const float length_px = Robot::length * scale;
+    const float width_px = Robot::width * scale;
+
+    const float front = length_px * 0.5F;
+    const float rear = length_px * 0.5F;
+    const float half_width = width_px * 0.5F;
 
     sf::ConvexShape triangle;
     triangle.setPointCount(3);
 
-    // Triangle points (front = head of robot)
-    triangle.setPoint(0, sf::Vector2f(front, 0));       // Front (head)
-    triangle.setPoint(1, sf::Vector2f(-rear, -width));  // Rear-left
-    triangle.setPoint(2, sf::Vector2f(-rear, width));   // Rear-right
+    triangle.setPoint(0, sf::Vector2f(front, 0));
+    triangle.setPoint(1, sf::Vector2f(-rear, -half_width));
+    triangle.setPoint(2, sf::Vector2f(-rear, half_width));
 
-    // ===== FIX: Negate theta because screen Y is inverted =====
-    // When world theta = 0, robot faces +X (right) ✓
-    // When world theta = π/2, screen should show robot facing down (not up)
-    // So we negate theta for screen display
     triangle.setRotation(static_cast<float>(-pose.theta * 180.0F / M_PI));
-
-    // Set position
     triangle.setPosition(worldToScreenX(pose.x), worldToScreenY(pose.y));
     triangle.setFillColor(colorRobot);
     triangle.setOutlineColor(sf::Color(200, 180, 0));
@@ -512,16 +547,18 @@ void Simulation::drawRobot(const Pose& pose) {
 
     window->draw(triangle);
 
-    // Direction indicator (red dot at front - shows head)
     sf::CircleShape dir_indicator(3);
     dir_indicator.setFillColor(sf::Color::Red);
-
-    // Calculate front position in screen coordinates
     float front_screen_x = worldToScreenX(pose.x) + front * std::cos(-pose.theta);
     float front_screen_y = worldToScreenY(pose.y) + front * std::sin(-pose.theta);
-
     dir_indicator.setPosition(front_screen_x - 3, front_screen_y - 3);
     window->draw(dir_indicator);
+
+    sf::CircleShape col_circle(Robot::radius * scale);
+    col_circle.setOrigin(Robot::radius * scale, Robot::radius * scale);
+    col_circle.setPosition(worldToScreenX(pose.x), worldToScreenY(pose.y));
+    col_circle.setFillColor(sf::Color(255, 0, 0, 50));
+    window->draw(col_circle);
 }
 
 void Simulation::drawPath(const std::vector<Pose>& path, const sf::Color& color,

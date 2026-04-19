@@ -43,9 +43,9 @@ struct Pose {
 class Robot {
 public:
     // Robot physical parameters
-    static constexpr float length = 0.6F;   // Wheelbase length (meters)
-    static constexpr float width = 0.4F;    // Robot width (meters)
-    static constexpr float radius = 0.35F;  // Collision radius (meters)
+    static constexpr float length = 0.45F;  // Wheelbase length (meters)
+    static constexpr float width = 0.3F;    // Robot width (meters)
+    static constexpr float radius = 0.15F;  // Collision radius (meters)
 
     // Motion parameters
     static constexpr float linear_velocity = 1.5F;       // m/s (constant)

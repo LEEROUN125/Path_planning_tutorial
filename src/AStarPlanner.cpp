@@ -111,6 +111,13 @@ void AStarPlanner::plan(const Pose& start, const Pose& goal) {
                 continue;  // SKIP blocked cells!
             }
 
+            if (dir.first != 0 && dir.second != 0) {
+                if (!map->isFreeGrid(current.gx + dir.first, current.gy) ||
+                    !map->isFreeGrid(current.gx, current.gy + dir.second)) {
+                    continue;
+                }
+            }
+
             // Calculate cost
             float move_cost = (dir.first != 0 && dir.second != 0) ? 14.0F : 10.0F;
             float tentative_g = current.g + move_cost;

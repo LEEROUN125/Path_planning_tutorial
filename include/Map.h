@@ -31,10 +31,10 @@ class Map {
 public:
     static float width;
     static float height;
-    static constexpr float wall_thickness = 0.3F;
+    static constexpr float wall_thickness = 0.2F;
 
     static constexpr int grid_cols = 50;
-    static constexpr int grid_rows = 25;
+    static constexpr int grid_rows = 50;
 
     static float getCellSizeX() { return width / grid_cols; }
     static float getCellSizeY() { return height / grid_rows; }

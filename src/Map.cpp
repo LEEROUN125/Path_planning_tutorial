@@ -5,7 +5,7 @@
 
 // ===== DEFINE static members =====
 float Map::width = 10.0F;
-float Map::height = 5.0F;
+float Map::height = 10.0F;
 
 // ===== Circle-Rectangle collision =====
 namespace {
@@ -35,7 +35,6 @@ void Map::initialize() {
     generateRandomObstacles();
     generateInternalWalls();
 
-    // CRITICAL: Update grid AFTER generating walls
     updateGrid();
 }
 
@@ -45,8 +44,8 @@ void Map::generateRandomObstacles() {
     std::random_device rd;
     std::mt19937 gen(rd());
 
-    float obs_width = Robot::length * 0.8F;
-    float obs_height = Robot::width * 0.8F;
+    float obs_width = Robot::length * 1.0F;
+    float obs_height = Robot::width * 1.0F;
 
     std::uniform_int_distribution<> num_dist(3, maxObstacles);
     int num_obstacles = num_dist(gen);
@@ -81,38 +80,42 @@ void Map::generateRandomObstacles() {
 
 void Map::generateInternalWalls() {
     internalWalls.clear();
-
     std::random_device rd;
     std::mt19937 gen(rd());
+    if (width < 4.0F || height < 4.0F) {
+        std::cerr << "Map too small for internal walls\n";
+        return;
+    }
 
     // 1-2 walls of each type (reduced from before)
     int num_horizontal_walls = static_cast<int>(1 + (rd() % 2));
     int num_vertical_walls = static_cast<int>(1 + (rd() % 2));
-
     float wall_thickness = 0.15F;
     float min_gap = 1.2F;
-
     // Horizontal walls
+    float available_height = height - 2 * wall_thickness - 2.0F;
+    if (available_height <= 0.0F) {
+        std::cerr << "Not enough vertical space for internal walls\n";
+        return;
+    }
     for (int i = 0; i < num_horizontal_walls; ++i) {
         float y = wall_thickness + 1.0F +
-                  static_cast<float>(rd() % static_cast<int>(height - wall_thickness * 2 - 2.0F));
-
+                  static_cast<float>(
+                      rd() % std::max(1, static_cast<int>(height - wall_thickness * 2 - 2.0F)));
         float min_x = wall_thickness + 0.5F;
         float max_x = width - wall_thickness - 0.5F;
-
         float wall_start = min_x + 0.5F;
         float wall_end = max_x - 0.5F;
-
         if (wall_end - wall_start > min_gap * 2) {
             float passage_width = min_gap;
             float passage_start =
-                wall_start + static_cast<float>(rd() % static_cast<int>(wall_end - wall_start -
-                                                                        passage_width - 1.0F));
+                wall_start +
+                static_cast<float>(rd() % std::max(1, static_cast<int>(wall_end - wall_start -
+                                                                       passage_width - 1.0F)));
             if (passage_start - wall_start > min_gap * 0.5F) {
                 internalWalls.emplace_back(wall_start, y - wall_thickness / 2,
                                            passage_start - wall_start, wall_thickness);
             }
-
             float passage_end = passage_start + passage_width;
             if (wall_end - passage_end > min_gap * 0.5F) {
                 internalWalls.emplace_back(passage_end, y - wall_thickness / 2,
@@ -120,28 +123,30 @@ void Map::generateInternalWalls() {
             }
         }
     }
-
     // Vertical walls
+    float available_width = width - 2 * wall_thickness - 2.0F;
+    if (available_width <= 0.0F) {
+        std::cerr << "Not enough horizontal space for internal walls\n";
+        return;
+    }
     for (int i = 0; i < num_vertical_walls; ++i) {
         float x = wall_thickness + 1.0F +
-                  static_cast<float>(rd() % static_cast<int>(width - wall_thickness * 2 - 2.0F));
-
+                  static_cast<float>(rd() % std::max(1, static_cast<int>(  // ✅ FIXED
+                                                            width - wall_thickness * 2 - 2.0F)));
         float min_y = wall_thickness + 0.5F;
         float max_y = height - wall_thickness - 0.5F;
-
         float wall_start = min_y + 0.5F;
         float wall_end = max_y - 0.5F;
         if (wall_end - wall_start > min_gap * 2) {
             float passage_width = min_gap;
             float passage_start =
-                wall_start + static_cast<float>(rd() % static_cast<int>(wall_end - wall_start -
-                                                                        passage_width - 1.0F));
-
+                wall_start +
+                static_cast<float>(rd() % std::max(1, static_cast<int>(wall_end - wall_start -
+                                                                       passage_width - 1.0F)));
             if (passage_start - wall_start > min_gap * 0.5F) {
                 internalWalls.emplace_back(x - wall_thickness / 2, wall_start, wall_thickness,
                                            passage_start - wall_start);
             }
-
             float passage_end = passage_start + passage_width;
             if (wall_end - passage_end > min_gap * 0.5F) {
                 internalWalls.emplace_back(x - wall_thickness / 2, passage_end, wall_thickness,
@@ -149,13 +154,13 @@ void Map::generateInternalWalls() {
             }
         }
     }
-
     std::cout << "Internal walls: " << internalWalls.size() << " (" << num_horizontal_walls
               << " H, " << num_vertical_walls << " V)" << '\n';
 }
 
 void Map::updateGrid() {
-    float margin_meters = Robot::radius;
+    float safety_padding = 0.15F;  // Extra padding to ensure safety
+    float margin_meters = Robot::radius + safety_padding;
 
     // Reset all cells to FREE
     for (auto& row : grid) {
@@ -186,7 +191,6 @@ void Map::updateGrid() {
         }
     }
 
-    // CRITICAL: Mark INTERNAL WALL cells
     for (const auto& wall : internalWalls) {
         float exp_x = wall.x - margin_meters;
         float exp_y = wall.y - margin_meters;

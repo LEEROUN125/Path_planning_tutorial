@@ -37,6 +37,28 @@ void RRTPlanner::plan(const Pose& start, const Pose& goal) {
         // Steer from nearest towards sample
         RRTNode new_node = steer(nearest, sample);
 
+        new_node.parentIndex = nearest_index;
+
+        bool edge_valid = true;
+        float dx = new_node.x - nearest.x;
+        float dy = new_node.y - nearest.y;
+        float dist = std::sqrt(dx * dx + dy * dy);
+
+        int steps = std::max(1, static_cast<int>(std::ceil(dist / 0.05F)));
+        for (int j = 1; j <= steps; ++j) {
+            float chk_x = nearest.x + dx * (static_cast<float>(j) / static_cast<float>(steps));
+            float chk_y = nearest.y + dy * (static_cast<float>(j) / static_cast<float>(steps));
+
+            if (!isStateValid(chk_x, chk_y)) {
+                edge_valid = false;
+                break;
+            }
+        }
+
+        if (!edge_valid) {
+            continue;
+        }
+
         // Check if state is valid
         if (!isStateValid(new_node.x, new_node.y)) {
             continue;
@@ -166,6 +188,21 @@ void RRTPlanner::findNearNeighbors(const RRTNode& node, std::vector<int>& neighb
 void RRTPlanner::rewireTree(int newNodeIndex, const std::vector<int>& neighbors) {
     RRTNode& new_node = tree[newNodeIndex];
 
+    auto is_edge_valid = [this](const RRTNode& n1, const RRTNode& n2) {
+        float dx = n2.x - n1.x;
+        float dy = n2.y - n1.y;
+        float dist = std::sqrt(dx * dx + dy * dy);
+        int steps = std::max(1, static_cast<int>(std::ceil(dist / 0.05F)));
+        for (int j = 1; j <= steps; ++j) {
+            float chk_x = n1.x + dx * (static_cast<float>(j) / static_cast<float>(steps));
+            float chk_y = n1.y + dy * (static_cast<float>(j) / static_cast<float>(steps));
+            if (!isStateValid(chk_x, chk_y)) {
+                return false;
+            }
+        }
+        return true;
+    };
+
     for (int neighbor_idx : neighbors) {
         RRTNode& neighbor = tree[neighbor_idx];
 
@@ -176,15 +213,19 @@ void RRTPlanner::rewireTree(int newNodeIndex, const std::vector<int>& neighbors)
 
         // If this path is better, rewire neighbor to new node
         if (new_cost < new_node.cost - 0.001F) {
-            new_node.parentIndex = neighbor_idx;
-            new_node.cost = new_cost;
+            if (is_edge_valid(neighbor, new_node)) {
+                new_node.parentIndex = neighbor_idx;
+                new_node.cost = new_cost;
+            }
         }
 
         // Also try to improve neighbor through new node
         float alt_cost = new_node.cost + edge_cost;
         if (alt_cost < neighbor.cost - 0.001F) {
-            neighbor.parentIndex = newNodeIndex;
-            neighbor.cost = alt_cost;
+            if (is_edge_valid(new_node, neighbor)) {
+                neighbor.parentIndex = newNodeIndex;
+                neighbor.cost = alt_cost;
+            }
         }
     }
 }
@@ -194,7 +235,9 @@ std::vector<PathPoint> RRTPlanner::extractPath(const RRTNode& goalNode) const {
 
     // Find path from goal to start by following parent pointers
     std::vector<int> reverse_indices;
-    int current_idx = static_cast<int>(tree.size()) - 1;  // Goal node index (added at end)
+
+    // NOLINTNEXTLINE(readability-container-data-pointer)
+    int current_idx = static_cast<int>(&goalNode - &tree[0]);
 
     while (current_idx != 0 && current_idx >= 0) {
         reverse_indices.push_back(current_idx);
