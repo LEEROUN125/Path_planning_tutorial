@@ -1,48 +1,42 @@
 #include "Simulation.h"
-#include <iostream>
-#include <cmath>
 #include <algorithm>
+#include <array>
+#include <cmath>
+#include <iomanip>
+#include <iostream>
 #include <sstream>
 #include <vector>
-#include <iomanip>
 
-Simulation::Simulation(int width, int height)
-    : windowWidth(width), windowHeight(height),
-      scale(0), offsetX(0), offsetY(0),
-      state(State::SETUP),
-      simulationSpeed(1.0f),
-      showGrid(false), showDebugInfo(true),
-      currentPathIndex(0), elapsedTime(0),
-      fontLoaded(false)
-{
+Simulation::Simulation(int width, int height) : windowWidth(width), windowHeight(height) {
     colorWall = sf::Color(30, 30, 30);
     colorObstacle = sf::Color(128, 0, 128);
     colorRobot = sf::Color(255, 255, 0);
     colorPathGT = sf::Color(255, 0, 0, 150);
     colorPathPlanned = sf::Color(0, 120, 255);
     colorBackground = sf::Color(240, 240, 245);
-    
-    std::vector<std::string> fontPaths = {
+
+    std::vector<std::string> font_paths = {
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
         "/usr/share/fonts/TTF/DejaVuSans.ttf",
     };
-    
-    for (const auto& path : fontPaths) {
+
+    for (const auto& path : font_paths) {
         if (guiFont.loadFromFile(path)) {
             fontLoaded = true;
-            std::cout << "Font loaded: " << path << std::endl;
+            std::cout << "Font loaded: " << path << '\n';
             break;
         }
     }
-    
+
     if (!fontLoaded) {
-        std::cerr << "Warning: No font found!" << std::endl;
+        std::cerr << "Warning: No font found!" << '\n';
     }
 }
 
 Simulation::~Simulation() {
-    if (window) delete window;
+    delete window;
+    window = nullptr;
 }
 
 void Simulation::initialize() {
@@ -52,51 +46,51 @@ void Simulation::initialize() {
         sf::Style::Titlebar | sf::Style::Close
     );
     window->setFramerateLimit(60);
-    
-    float scaleX = static_cast<float>(windowWidth - 100) / Map::WIDTH;
-    float scaleY = static_cast<float>(windowHeight - 100) / Map::HEIGHT;
-    scale = std::min(scaleX, scaleY);
-    
-    offsetX = (windowWidth - Map::WIDTH * scale) / 2.0f;
-    offsetY = (windowHeight - Map::HEIGHT * scale) / 2.0f;
-    
+
+    float scale_x = static_cast<float>(windowWidth - 100) / Map::width;
+    float scale_y = static_cast<float>(windowHeight - 100) / Map::height;
+    scale = std::min(scale_x, scale_y);
+
+    offsetX = (static_cast<float>(windowWidth) - Map::width * scale) / 2.0F;
+    offsetY = (static_cast<float>(windowHeight) - Map::height * scale) / 2.0F;
+
     map.initialize();
     map.printInfo();
-    
-    startPose = Pose(1.5f, 1.5f, 0.0f);
-    goalPose = Pose(Map::WIDTH - 1.5f, Map::HEIGHT - 1.5f, 0.0f);
-    
-    while (!map.isValidPosition(startPose.x, startPose.y)) {
-        startPose.x += 0.5f;
-        if (startPose.x > Map::WIDTH - 1.5f) {
-            startPose.x = 1.5f;
-            startPose.y += 0.5f;
+
+    start_pose = Pose(1.5F, 1.5F, 0.0F);
+    goal_pose = Pose(Map::width - 1.5F, Map::height - 1.5F, 0.0F);
+
+    while (!map.isValidPosition(start_pose.x, start_pose.y)) {
+        start_pose.x += 0.5F;
+        if (start_pose.x > Map::width - 1.5F) {
+            start_pose.x = 1.5F;
+            start_pose.y += 0.5F;
         }
     }
-    
-    while (!map.isValidPosition(goalPose.x, goalPose.y)) {
-        goalPose.x -= 0.5f;
-        if (goalPose.x < 1.5f) {
-            goalPose.x = Map::WIDTH - 1.5f;
-            goalPose.y -= 0.5f;
+
+    while (!map.isValidPosition(goal_pose.x, goal_pose.y)) {
+        goal_pose.x -= 0.5F;
+        if (goal_pose.x < 1.5F) {
+            goal_pose.x = Map::width - 1.5F;
+            goal_pose.y -= 0.5F;
         }
     }
-    
-    robot.setPose(startPose);
+
+    robot.setPose(start_pose);
     planner = std::make_unique<AStarPlanner>(&map, &robot);
     replan();
-    
+
     state = State::SETUP;
 }
 
 void Simulation::setStart(const Pose& start) {
-    startPose = start;
-    robot.setPose(startPose);
+    start_pose = start;
+    robot.setPose(start_pose);
     replan();
 }
 
 void Simulation::setGoal(const Pose& goal) {
-    goalPose = goal;
+    goal_pose = goal;
     replan();
 }
 
@@ -118,52 +112,56 @@ void Simulation::setAlgorithm(AlgorithmType type) {
 }
 
 void Simulation::replan() {
-    robot.setPose(startPose);
-    planner->plan(startPose, goalPose);
-    
+    robot.setPose(start_pose);
+    planner->plan(start_pose, goal_pose);
+
     if (!planner->getPath().empty()) {
         plannedPath = pathPointsToPoses(planner->getPath());
         groundTruthPath = plannedPath;
         currentPathIndex = 1;
-        
-        std::cout << "Planned with " << planner->getAlgorithmName() << std::endl;
-        std::cout << "  Path: " << planner->getPathCost() << " m" << std::endl;
-        std::cout << "  Waypoints: " << plannedPath.size() << std::endl;
+
+        std::cout << "Planned with " << planner->getAlgorithmName() << '\n';
+        std::cout << "  Path: " << planner->getPathCost() << " m" << '\n';
+        std::cout << "  Waypoints: " << plannedPath.size() << '\n';
     } else {
-        std::cerr << "Warning: No path found!" << std::endl;
+        std::cerr << "Warning: No path found!" << '\n';
         plannedPath.clear();
-        
+
         // Try to find a valid start/goal if path fails
-        std::cout << "Attempting to find valid positions..." << std::endl;
-        
+        std::cout << "Attempting to find valid positions..." << '\n';
+
         // Find a free start position
-        for (float y = 1.0f; y < Map::HEIGHT - 1.0f; y += 0.5f) {
-            for (float x = 1.0f; x < Map::WIDTH - 1.0f; x += 0.5f) {
+        for (float y = 1.0F; y < Map::height - 1.0F; y += 0.5F) {
+            for (float x = 1.0F; x < Map::width - 1.0F; x += 0.5F) {
                 if (map.isValidPosition(x, y)) {
-                    startPose = Pose(x, y, 0.0f);
-                    std::cout << "  New start: (" << x << ", " << y << ")" << std::endl;
+                    start_pose = Pose(x, y, 0.0F);
+                    std::cout << "  New start: (" << x << ", " << y << ")" << '\n';
                     break;
                 }
             }
-            if (map.isValidPosition(startPose.x, startPose.y)) break;
+            if (map.isValidPosition(start_pose.x, start_pose.y)) {
+                break;
+            }
         }
-        
+
         // Find a free goal position
-        for (float y = Map::HEIGHT - 1.5f; y > 1.0f; y -= 0.5f) {
-            for (float x = Map::WIDTH - 1.5f; x > 1.0f; x -= 0.5f) {
+        for (float y = Map::height - 1.5F; y > 1.0F; y -= 0.5F) {
+            for (float x = Map::width - 1.5F; x > 1.0F; x -= 0.5F) {
                 if (map.isValidPosition(x, y)) {
-                    goalPose = Pose(x, y, 0.0f);
-                    std::cout << "  New goal: (" << x << ", " << y << ")" << std::endl;
+                    goal_pose = Pose(x, y, 0.0F);
+                    std::cout << "  New goal: (" << x << ", " << y << ")" << '\n';
                     break;
                 }
             }
-            if (map.isValidPosition(goalPose.x, goalPose.y)) break;
+            if (map.isValidPosition(goal_pose.x, goal_pose.y)) {
+                break;
+            }
         }
-        
+
         // Replan with new positions
-        robot.setPose(startPose);
-        planner->plan(startPose, goalPose);
-        
+        robot.setPose(start_pose);
+        planner->plan(start_pose, goal_pose);
+
         if (!planner->getPath().empty()) {
             plannedPath = pathPointsToPoses(planner->getPath());
             groundTruthPath = plannedPath;
@@ -174,90 +172,94 @@ void Simulation::replan() {
 
 // Add this new helper function before replan()
 std::vector<Pose> Simulation::resamplePath(const std::vector<Pose>& path, float spacing) {
-    if (path.empty()) return {};
-    if (path.size() < 2) return path;
-    
+    if (path.empty()) {
+        return {};
+    }
+    if (path.size() < 2) {
+        return path;
+    }
+
     std::vector<Pose> resampled;
-    
+
     // Always include START
     resampled.push_back(path.front());
-    
+
     // Calculate total path length first
-    float totalLength = 0;
+    float total_length = 0.0F;
     for (size_t i = 1; i < path.size(); ++i) {
-        totalLength += path[i-1].distTo(path[i]);
+        total_length += path[i - 1].distTo(path[i]);
     }
-    
-    if (totalLength < 1.0f) {
+
+    if (total_length < 1.0F) {
         // Short path - just return original
         return path;
     }
-    
+
     // Desired number of waypoints
-    int desiredCount = static_cast<int>(totalLength / spacing);
-    desiredCount = std::max(desiredCount, 5);  // At least 5 waypoints
-    desiredCount = std::min(desiredCount, 50); // At most 50 waypoints
-    
+    int desired_count = static_cast<int>(total_length / spacing);
+    desired_count = std::max(desired_count, 5);   // At least 5 waypoints
+    desired_count = std::min(desired_count, 50);  // At most 50 waypoints
+
     // Create evenly spaced waypoints along the path
-    float segmentLengths = totalLength / desiredCount;
-    
-    float accumulatedDist = 0;
-    size_t pathIndex = 1;
-    float distToNext = path[0].distTo(path[1]);
-    
-    for (int i = 0; i < desiredCount; ++i) {
-        float targetDist = (i + 1) * segmentLengths;
-        
+    float segment_lengths = total_length / static_cast<float>(desired_count);
+
+    float accumulated_dist = 0.0F;
+    size_t path_index = 1;
+    float dist_to_next = path[0].distTo(path[1]);
+
+    for (int i = 0; i < desired_count; ++i) {
+        float target_dist = (static_cast<float>(i) + 1.0F) * segment_lengths;
+
         // Move along path until we reach target distance
-        while (pathIndex < path.size() && accumulatedDist + distToNext < targetDist) {
-            accumulatedDist += distToNext;
-            pathIndex++;
-            if (pathIndex < path.size()) {
-                distToNext = path[pathIndex - 1].distTo(path[pathIndex]);
+        while (path_index < path.size() && accumulated_dist + dist_to_next < target_dist) {
+            accumulated_dist += dist_to_next;
+            path_index++;
+            if (path_index < path.size()) {
+                dist_to_next = path[path_index - 1].distTo(path[path_index]);
             }
         }
-        
+
         // Interpolate position
-        if (pathIndex < path.size()) {
-            float remaining = targetDist - accumulatedDist;
-            float ratio = remaining / distToNext;
-            
-            const Pose& p1 = path[pathIndex - 1];
-            const Pose& p2 = path[pathIndex];
-            
+        if (path_index < path.size()) {
+            float remaining = target_dist - accumulated_dist;
+            float ratio = remaining / dist_to_next;
+
+            const Pose& p1 = path[path_index - 1];
+            const Pose& p2 = path[path_index];
+
             Pose interpolated;
             interpolated.x = p1.x + ratio * (p2.x - p1.x);
             interpolated.y = p1.y + ratio * (p2.y - p1.y);
             interpolated.theta = p2.theta;  // Face direction of next point
-            
+
             resampled.push_back(interpolated);
         }
     }
-    
+
     // Always include GOAL
-    if (resampled.back().distTo(path.back()) > spacing * 0.5f) {
-        Pose goalPose = path.back();
-        goalPose.theta = path.size() > 1 ? path[path.size()-2].theta : 0;
-        resampled.push_back(goalPose);
+    if (resampled.back().distTo(path.back()) > spacing * 0.5F) {
+        Pose goal_pose = path.back();
+        goal_pose.theta = path.size() > 1 ? path[path.size() - 2].theta : 0;
+        resampled.push_back(goal_pose);
     }
-    
+
     return resampled;
 }
 
 void Simulation::run() {
-    startTime = std::chrono::high_resolution_clock::now();
-    lastUpdate = startTime;
-    
+    start_time = std::chrono::high_resolution_clock::now();
+    last_update = start_time;
+
     while (window->isOpen()) {
         processEvents();
-        
+
         if (state == State::RUNNING) {
             auto now = std::chrono::high_resolution_clock::now();
-            float dt = std::chrono::duration<float>(now - lastUpdate).count();
-            lastUpdate = now;
+            float dt = std::chrono::duration<float>(now - last_update).count();
+            last_update = now;
             update(dt * simulationSpeed);
         }
-        
+
         window->clear(colorBackground);
         draw();
         window->display();
@@ -278,10 +280,9 @@ void Simulation::processEvents() {
 void Simulation::handleKeyPress(sf::Keyboard::Key key) {
     switch (key) {
         case sf::Keyboard::Space:
-            if (state == State::SETUP || state == State::COMPLETED || 
-                state == State::PAUSED) {
+            if (state == State::SETUP || state == State::COMPLETED || state == State::PAUSED) {
                 state = State::RUNNING;
-                lastUpdate = std::chrono::high_resolution_clock::now();
+                last_update = std::chrono::high_resolution_clock::now();
             } else if (state == State::RUNNING) {
                 state = State::PAUSED;
             }
@@ -308,7 +309,7 @@ void Simulation::handleKeyPress(sf::Keyboard::Key key) {
             replan();
             break;
         case sf::Keyboard::S:
-            simulationSpeed = (simulationSpeed == 1.0f) ? 3.0f : 1.0f;
+            simulationSpeed = (simulationSpeed == 1.0F) ? 3.0F : 1.0F;
             break;
         case sf::Keyboard::Escape:
             window->close();
@@ -320,13 +321,13 @@ void Simulation::handleKeyPress(sf::Keyboard::Key key) {
 
 void Simulation::reset() {
     map.generateRandomObstacles();
-    startPose = Pose(1.5f, 1.5f, 0.0f);
-    goalPose = Pose(Map::WIDTH - 1.5f, Map::HEIGHT - 1.5f, 0.0f);
-    robot.setPose(startPose);
+    start_pose = Pose(1.5F, 1.5F, 0.0F);
+    goal_pose = Pose(Map::width - 1.5F, Map::height - 1.5F, 0.0F);
+    robot.setPose(start_pose);
     replan();
-    
+
     auto now = std::chrono::high_resolution_clock::now();
-    elapsedTime = std::chrono::duration<float>(now - startTime).count();
+    elapsedTime = std::chrono::duration<float>(now - start_time).count();
 }
 
 void Simulation::update(float dt) {
@@ -334,80 +335,80 @@ void Simulation::update(float dt) {
         state = State::COMPLETED;
         return;
     }
-    
+
     const Pose& current = robot.getPose();
     const Pose& target = plannedPath[currentPathIndex];
-    
+
     float dx = target.x - current.x;
     float dy = target.y - current.y;
     float dist = std::sqrt(dx * dx + dy * dy);
-    
+
     // Calculate desired heading angle
     // atan2(-dy, -dx) gives correct direction
-    float targetTheta = std::atan2(dy, dx);
-    
+    float target_theta = std::atan2(dy, dx);
+
     // Calculate angle difference
-    float angleDiff = Pose::normalizeAngle(targetTheta - current.theta);
-    
+    float angle_diff = Pose::normalizeAngle(target_theta - current.theta);
+
     // Rotate towards target (proportional control)
-    float maxRotation = Robot::MAX_ANGULAR_VELOCITY * dt;  // Max rotation per frame
-    float rotation = std::max(-maxRotation, std::min(maxRotation, angleDiff));
-    
+    float max_rotation = Robot::max_angular_velocity * dt;  // Max rotation per frame
+    float rotation = std::max(-max_rotation, std::min(max_rotation, angle_diff));
+
     // Apply rotation
-    Pose newPose = current;
-    newPose.theta = Pose::normalizeAngle(current.theta + rotation * 5.0f);
-    
+    Pose new_pose = current;
+    new_pose.theta = Pose::normalizeAngle(current.theta + rotation * 5.0F);
+
     // Move forward in the direction robot is facing
-    if (dist >= 0.3f) {
-        newPose.x = current.x + Robot::LINEAR_VELOCITY * std::cos(newPose.theta) * dt;
-        newPose.y = current.y + Robot::LINEAR_VELOCITY * std::sin(newPose.theta) * dt;
-        
+    if (dist >= 0.3F) {
+        new_pose.x = current.x + Robot::linear_velocity * std::cos(new_pose.theta) * dt;
+        new_pose.y = current.y + Robot::linear_velocity * std::sin(new_pose.theta) * dt;
+
         // Check collision
-        if (map.isValidPosition(newPose.x, newPose.y)) {
-            robot.setPose(newPose);
+        if (map.isValidPosition(new_pose.x, new_pose.y)) {
+            robot.setPose(new_pose);
         } else {
             // Stop if collision
             state = State::SETUP;
             return;
         }
     }
-    
+
     // Check if waypoint reached
-    if (dist < 0.3f) {
+    if (dist < 0.3F) {
         currentPathIndex++;
         if (currentPathIndex >= plannedPath.size()) {
             state = State::COMPLETED;
             return;
         }
     }
-    
+
     elapsedTime += dt;
 }
 
 void Simulation::draw() {
     drawMap();
-    
+
     if (showGrid) {
         drawGrid();
     }
-    
+
     if (!groundTruthPath.empty()) {
-        drawPath(groundTruthPath, colorPathGT, 2.0f, true);
+        drawPath(groundTruthPath, colorPathGT, 2.0F, true);
     }
-    
+
     if (currentPathIndex < plannedPath.size()) {
-        std::vector<Pose> remainingPath;
-        remainingPath.push_back(robot.getPose());
+        std::vector<Pose> remaining_path;
+        remaining_path.push_back(robot.getPose());
         for (size_t i = currentPathIndex; i < plannedPath.size(); ++i) {
-            remainingPath.push_back(plannedPath[i]);
+            remaining_path.push_back(plannedPath[i]);
         }
-        drawPath(remainingPath, colorPathPlanned, 3.0f, false);
+        drawPath(remaining_path, colorPathPlanned, 3.0F, false);
     }
-    
-    drawMarker(startPose, sf::Color::Green);
-    drawMarker(goalPose, sf::Color::Blue);
+
+    drawMarker(start_pose, sf::Color::Green);
+    drawMarker(goal_pose, sf::Color::Blue);
     drawRobot(robot.getPose());
-    
+
     if (showDebugInfo) {
         drawDebugInfo();
     }
@@ -418,17 +419,17 @@ void Simulation::drawMap() {
     const Rectangle* walls = map.getWalls();
     sf::RectangleShape wall;
     wall.setFillColor(colorWall);
-    
+
     for (int i = 0; i < 4; ++i) {
         wall.setSize(sf::Vector2f(walls[i].width * scale, walls[i].height * scale));
-        wall.setPosition(walls[i].x * scale + offsetX, 
-                        (Map::HEIGHT - walls[i].y - walls[i].height) * scale + offsetY);
+        wall.setPosition(walls[i].x * scale + offsetX,
+                         (Map::height - walls[i].y - walls[i].height) * scale + offsetY);
         window->draw(wall);
     }
-    
+
     // Draw internal walls
     drawInternalWalls();
-    
+
     // Draw obstacles
     drawObstacles();
 }
@@ -438,11 +439,11 @@ void Simulation::drawInternalWalls() {
     wall.setFillColor(sf::Color(50, 50, 50));  // Dark gray
     wall.setOutlineColor(sf::Color(30, 30, 30));
     wall.setOutlineThickness(1);
-    
-    for (const auto& wallRect : map.getInternalWalls()) {
-        wall.setSize(sf::Vector2f(wallRect.width * scale, wallRect.height * scale));
-        wall.setPosition(wallRect.x * scale + offsetX,
-                        (Map::HEIGHT - wallRect.y - wallRect.height) * scale + offsetY);
+
+    for (const auto& wall_rect : map.getInternalWalls()) {
+        wall.setSize(sf::Vector2f(wall_rect.width * scale, wall_rect.height * scale));
+        wall.setPosition(wall_rect.x * scale + offsetX,
+                         (Map::height - wall_rect.y - wall_rect.height) * scale + offsetY);
         window->draw(wall);
     }
 }
@@ -452,58 +453,56 @@ void Simulation::drawObstacles() {
     obs.setFillColor(colorObstacle);
     obs.setOutlineColor(sf::Color(80, 0, 80));
     obs.setOutlineThickness(1);
-    
+
     for (const auto& obstacle : map.getObstacles()) {
         obs.setSize(sf::Vector2f(obstacle.width * scale, obstacle.height * scale));
         obs.setPosition(obstacle.x * scale + offsetX,
-                        (Map::HEIGHT - obstacle.y - obstacle.height) * scale + offsetY);
+                        (Map::height - obstacle.y - obstacle.height) * scale + offsetY);
         window->draw(obs);
     }
 }
 
 void Simulation::drawGrid() {
-    for (int x = 0; x <= static_cast<int>(Map::WIDTH); ++x) {
-        sf::Vertex line[] = {
-            sf::Vertex(sf::Vector2f(x * scale + offsetX, offsetY), 
-                      sf::Color(200, 200, 200, 100)),
-            sf::Vertex(sf::Vector2f(x * scale + offsetX, 
-                                   Map::HEIGHT * scale + offsetY), 
-                      sf::Color(200, 200, 200, 100))
-        };
-        window->draw(line, 2, sf::Lines);
+    for (int x = 0; x <= static_cast<int>(Map::width); ++x) {
+        std::array<sf::Vertex, 2> line = {
+            sf::Vertex(sf::Vector2f(static_cast<float>(x) * scale + offsetX, offsetY),
+                       sf::Color(200, 200, 200, 100)),
+            sf::Vertex(sf::Vector2f(static_cast<float>(x) * scale + offsetX,
+                                    Map::height * scale + offsetY),
+                       sf::Color(200, 200, 200, 100))};
+        window->draw(line.data(), line.size(), sf::Lines);
     }
-    
-    for (int y = 0; y <= static_cast<int>(Map::HEIGHT); ++y) {
-        sf::Vertex line[] = {
-            sf::Vertex(sf::Vector2f(offsetX, y * scale + offsetY), 
-                      sf::Color(200, 200, 200, 100)),
-            sf::Vertex(sf::Vector2f(Map::WIDTH * scale + offsetX,
-                                   y * scale + offsetY), 
-                      sf::Color(200, 200, 200, 100))
-        };
-        window->draw(line, 2, sf::Lines);
+
+    for (int y = 0; y <= static_cast<int>(Map::height); ++y) {
+        std::array<sf::Vertex, 2> line = {
+            sf::Vertex(sf::Vector2f(offsetX, static_cast<float>(y) * scale + offsetY),
+                       sf::Color(200, 200, 200, 100)),
+            sf::Vertex(sf::Vector2f(Map::width * scale + offsetX,
+                                    static_cast<float>(y) * scale + offsetY),
+                       sf::Color(200, 200, 200, 100))};
+        window->draw(line.data(), line.size(), sf::Lines);
     }
 }
 
 void Simulation::drawRobot(const Pose& pose) {
-    const float SIZE = 30.0f;
-    const float FRONT = SIZE * 1.0f;
-    const float REAR = SIZE * 0.6f;
-    const float WIDTH = SIZE * 0.4f;
+    const float size = 30.0F;
+    const float front = size * 1.0F;
+    const float rear = size * 0.6F;
+    const float width = size * 0.4F;
 
     sf::ConvexShape triangle;
     triangle.setPointCount(3);
-    
+
     // Triangle points (front = head of robot)
-    triangle.setPoint(0, sf::Vector2f(FRONT, 0));   // Front (head)
-    triangle.setPoint(1, sf::Vector2f(-REAR, -WIDTH));  // Rear-left
-    triangle.setPoint(2, sf::Vector2f(-REAR, WIDTH));   // Rear-right
+    triangle.setPoint(0, sf::Vector2f(front, 0));       // Front (head)
+    triangle.setPoint(1, sf::Vector2f(-rear, -width));  // Rear-left
+    triangle.setPoint(2, sf::Vector2f(-rear, width));   // Rear-right
 
     // ===== FIX: Negate theta because screen Y is inverted =====
     // When world theta = 0, robot faces +X (right) ✓
     // When world theta = π/2, screen should show robot facing down (not up)
     // So we negate theta for screen display
-    triangle.setRotation(-pose.theta * 180.0f / M_PI);
+    triangle.setRotation(static_cast<float>(-pose.theta * 180.0F / M_PI));
 
     // Set position
     triangle.setPosition(worldToScreenX(pose.x), worldToScreenY(pose.y));
@@ -514,21 +513,23 @@ void Simulation::drawRobot(const Pose& pose) {
     window->draw(triangle);
 
     // Direction indicator (red dot at front - shows head)
-    sf::CircleShape dirIndicator(3);
-    dirIndicator.setFillColor(sf::Color::Red);
-    
+    sf::CircleShape dir_indicator(3);
+    dir_indicator.setFillColor(sf::Color::Red);
+
     // Calculate front position in screen coordinates
-    float frontScreenX = worldToScreenX(pose.x) + FRONT * std::cos(-pose.theta);
-    float frontScreenY = worldToScreenY(pose.y) + FRONT * std::sin(-pose.theta);
-    
-    dirIndicator.setPosition(frontScreenX - 3, frontScreenY - 3);
-    window->draw(dirIndicator);
+    float front_screen_x = worldToScreenX(pose.x) + front * std::cos(-pose.theta);
+    float front_screen_y = worldToScreenY(pose.y) + front * std::sin(-pose.theta);
+
+    dir_indicator.setPosition(front_screen_x - 3, front_screen_y - 3);
+    window->draw(dir_indicator);
 }
 
 void Simulation::drawPath(const std::vector<Pose>& path, const sf::Color& color,
                          float thickness, bool dashed) {
-    if (path.size() < 2) return;
-    
+    if (path.size() < 2) {
+        return;
+    }
+
     if (dashed) {
         sf::CircleShape dot(thickness);
         dot.setFillColor(color);
@@ -538,17 +539,15 @@ void Simulation::drawPath(const std::vector<Pose>& path, const sf::Color& color,
         }
     } else {
         for (size_t i = 0; i < path.size() - 1; ++i) {
-            sf::Vertex line[] = {
-                sf::Vertex(poseToVector(path[i]), color),
-                sf::Vertex(poseToVector(path[i + 1]), color)
-            };
-            window->draw(line, 2, sf::Lines);
+            std::array<sf::Vertex, 2> line = {sf::Vertex(poseToVector(path[i]), color),
+                                              sf::Vertex(poseToVector(path[i + 1]), color)};
+            window->draw(line.data(), line.size(), sf::Lines);
         }
-        
+
         sf::CircleShape dot(thickness);
         dot.setFillColor(color);
-        for (size_t i = 0; i < path.size(); ++i) {
-            dot.setPosition(poseToVector(path[i]) - sf::Vector2f(thickness, thickness));
+        for (const auto& pose : path) {
+            dot.setPosition(poseToVector(pose) - sf::Vector2f(thickness, thickness));
             window->draw(dot);
         }
     }
@@ -571,19 +570,19 @@ void Simulation::drawDebugInfo() {
     bg.setOutlineThickness(1);
     bg.setPosition(10, 10);
     window->draw(bg);
-    
+
     if (fontLoaded) {
         sf::Text text;
         text.setFont(guiFont);
         text.setCharacterSize(14);
         text.setFillColor(sf::Color::Black);
         text.setPosition(20, 20);
-        
+
         std::stringstream ss;
         ss << "Path Planning Simulation\n";
         ss << "------------------------\n";
         ss << "Algorithm: " << planner->getAlgorithmName() << "\n";
-        
+
         switch (state) {
             case State::SETUP:     ss << "Status: Ready\n"; break;
             case State::RUNNING:   ss << "Status: Running\n"; break;
@@ -591,7 +590,7 @@ void Simulation::drawDebugInfo() {
             case State::PAUSED:    ss << "Status: Paused\n"; break;
             default:               ss << "Status: Unknown\n"; break;
         }
-        
+
         ss << std::fixed << std::setprecision(1);
         ss << "Path: " << planner->getPathCost() << " m\n";
         ss << "Time: " << planner->getPlanningTime() << " ms\n";
@@ -601,21 +600,31 @@ void Simulation::drawDebugInfo() {
         ss << "R: Reset\n";
         ss << "G: Grid\n";
         ss << "1: A*  3: RRT  4: RRT*";
-        
+
         text.setString(ss.str());
         window->draw(text);
     } else {
         // Fallback: draw shapes instead of text
-        sf::CircleShape statusDot(6);
+        sf::CircleShape status_dot(6);
         switch (state) {
-            case State::SETUP:     statusDot.setFillColor(sf::Color::Yellow); break;
-            case State::RUNNING:   statusDot.setFillColor(sf::Color::Green); break;
-            case State::COMPLETED: statusDot.setFillColor(sf::Color::Blue); break;
-            case State::PAUSED:    statusDot.setFillColor(sf::Color(255, 165, 0)); break;
-            default:               statusDot.setFillColor(sf::Color::Red); break;
+            case State::SETUP:
+                status_dot.setFillColor(sf::Color::Yellow);
+                break;
+            case State::RUNNING:
+                status_dot.setFillColor(sf::Color::Green);
+                break;
+            case State::COMPLETED:
+                status_dot.setFillColor(sf::Color::Blue);
+                break;
+            case State::PAUSED:
+                status_dot.setFillColor(sf::Color(255, 165, 0));
+                break;
+            default:
+                status_dot.setFillColor(sf::Color::Red);
+                break;
         }
-        statusDot.setPosition(20, 25);
-        window->draw(statusDot);
+        status_dot.setPosition(20, 25);
+        window->draw(status_dot);
     }
 }
 
@@ -624,7 +633,7 @@ float Simulation::worldToScreenX(float wx) const {
 }
 
 float Simulation::worldToScreenY(float wy) const {
-    return (Map::HEIGHT - wy) * scale + offsetY;
+    return (Map::height - wy) * scale + offsetY;
 }
 
 float Simulation::screenToWorldX(float sx) const {
@@ -632,17 +641,18 @@ float Simulation::screenToWorldX(float sx) const {
 }
 
 float Simulation::screenToWorldY(float sy) const {
-    return Map::HEIGHT - (sy - offsetY) / scale;
+    return Map::height - (sy - offsetY) / scale;
 }
 
 sf::Vector2f Simulation::poseToVector(const Pose& pose) const {
-    return sf::Vector2f(worldToScreenX(pose.x), worldToScreenY(pose.y));
+    return {worldToScreenX(pose.x), worldToScreenY(pose.y)};
 }
 
 std::vector<Pose> Simulation::pathPointsToPoses(const std::vector<PathPoint>& path) {
     std::vector<Pose> result;
+    result.reserve(path.size());
     for (const auto& pt : path) {
-        result.push_back(Pose(pt.x, pt.y, pt.theta));
+        result.emplace_back(pt.x, pt.y, pt.theta);
     }
     return result;
 }

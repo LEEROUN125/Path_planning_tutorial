@@ -1,18 +1,20 @@
 #include "Map.h"
 #include "Robot.h"
 
+#include <algorithm>
+
 // ===== DEFINE static members =====
-float Map::WIDTH = 10.0f;
-float Map::HEIGHT = 5.0f;
+float Map::width = 10.0F;
+float Map::height = 5.0F;
 
 // ===== Circle-Rectangle collision =====
 namespace {
     bool circleRectIntersect(float cx, float cy, float r,
                              float rx, float ry, float rw, float rh) {
-        float closestX = std::max(rx, std::min(cx, rx + rw));
-        float closestY = std::max(ry, std::min(cy, ry + rh));
-        float dx = cx - closestX;
-        float dy = cy - closestY;
+        float closest_x = std::max(rx, std::min(cx, rx + rw));
+        float closest_y = std::max(ry, std::min(cy, ry + rh));
+        float dx = cx - closest_x;
+        float dy = cy - closest_y;
         return (dx * dx + dy * dy) < (r * r);
     }
 }
@@ -23,44 +25,44 @@ Map::Map(int maxObs) : maxObstacles(maxObs) {
 
 void Map::initialize() {
     // Outer walls
-    outerWalls[0] = Rectangle(0, 0, WIDTH, WALL_THICKNESS);
-    outerWalls[1] = Rectangle(0, HEIGHT - WALL_THICKNESS, WIDTH, WALL_THICKNESS);
-    outerWalls[2] = Rectangle(0, 0, WALL_THICKNESS, HEIGHT);
-    outerWalls[3] = Rectangle(WIDTH - WALL_THICKNESS, 0, WALL_THICKNESS, HEIGHT);
-    
-    grid.resize(GRID_ROWS, std::vector<bool>(GRID_COLS, true));
-    
+    outerWalls[0] = Rectangle(0, 0, width, wall_thickness);
+    outerWalls[1] = Rectangle(0, height - wall_thickness, width, wall_thickness);
+    outerWalls[2] = Rectangle(0, 0, wall_thickness, height);
+    outerWalls[3] = Rectangle(width - wall_thickness, 0, wall_thickness, height);
+
+    grid.resize(grid_rows, std::vector<bool>(grid_cols, true));
+
     generateRandomObstacles();
     generateInternalWalls();
-    
+
     // CRITICAL: Update grid AFTER generating walls
     updateGrid();
 }
 
 void Map::generateRandomObstacles() {
     obstacles.clear();
-    
+
     std::random_device rd;
     std::mt19937 gen(rd());
-    
-    float obsWidth = Robot::LENGTH * 0.8f;
-    float obsHeight = Robot::WIDTH * 0.8f;
-    
-    std::uniform_int_distribution<> numDist(3, maxObstacles);
-    int numObstacles = numDist(gen);
-    
-    float margin = WALL_THICKNESS + 0.5f;
-    
-    for (int i = 0; i < numObstacles; ++i) {
+
+    float obs_width = Robot::length * 0.8F;
+    float obs_height = Robot::width * 0.8F;
+
+    std::uniform_int_distribution<> num_dist(3, maxObstacles);
+    int num_obstacles = num_dist(gen);
+
+    float margin = wall_thickness + 0.5F;
+
+    for (int i = 0; i < num_obstacles; ++i) {
         bool valid = false;
         int attempts = 0;
-        
+
         while (!valid && attempts < 100) {
-            std::uniform_real_distribution<float> xDist(margin, WIDTH - margin - obsWidth);
-            std::uniform_real_distribution<float> yDist(margin, HEIGHT - margin - obsHeight);
-            
-            Rectangle candidate(xDist(gen), yDist(gen), obsWidth, obsHeight);
-            
+            std::uniform_real_distribution<float> x_dist(margin, width - margin - obs_width);
+            std::uniform_real_distribution<float> y_dist(margin, height - margin - obs_height);
+
+            Rectangle candidate(x_dist(gen), y_dist(gen), obs_width, obs_height);
+
             valid = true;
             for (const auto& existing : obstacles) {
                 if (candidate.intersects(existing)) {
@@ -68,7 +70,7 @@ void Map::generateRandomObstacles() {
                     break;
                 }
             }
-            
+
             if (valid) {
                 obstacles.push_back(candidate);
             }
@@ -79,207 +81,208 @@ void Map::generateRandomObstacles() {
 
 void Map::generateInternalWalls() {
     internalWalls.clear();
-    
+
     std::random_device rd;
     std::mt19937 gen(rd());
-    
+
     // 1-2 walls of each type (reduced from before)
-    int numHorizontalWalls = 1 + (rd() % 2);
-    int numVerticalWalls = 1 + (rd() % 2);
-    
-    float wallThickness = 0.15f;
-    float minGap = 1.2f;
-    
+    int num_horizontal_walls = static_cast<int>(1 + (rd() % 2));
+    int num_vertical_walls = static_cast<int>(1 + (rd() % 2));
+
+    float wall_thickness = 0.15F;
+    float min_gap = 1.2F;
+
     // Horizontal walls
-    for (int i = 0; i < numHorizontalWalls; ++i) {
-        float y = WALL_THICKNESS + 1.0f + static_cast<float>(rd() % 
-                    static_cast<int>(HEIGHT - WALL_THICKNESS * 2 - 2.0f));
-        
-        float minX = WALL_THICKNESS + 0.5f;
-        float maxX = WIDTH - WALL_THICKNESS - 0.5f;
-        
-        float wallStart = minX + 0.5f;
-        float wallEnd = maxX - 0.5f;
-        
-        if (wallEnd - wallStart > minGap * 2) {
-            float passageWidth = minGap;
-            float passageStart = wallStart + static_cast<float>(rd() % 
-                                 static_cast<int>(wallEnd - wallStart - passageWidth - 1.0f));
-            
-            if (passageStart - wallStart > minGap * 0.5f) {
-                internalWalls.push_back(Rectangle(
-                    wallStart, y - wallThickness/2, 
-                    passageStart - wallStart, wallThickness
-                ));
+    for (int i = 0; i < num_horizontal_walls; ++i) {
+        float y = wall_thickness + 1.0F +
+                  static_cast<float>(rd() % static_cast<int>(height - wall_thickness * 2 - 2.0F));
+
+        float min_x = wall_thickness + 0.5F;
+        float max_x = width - wall_thickness - 0.5F;
+
+        float wall_start = min_x + 0.5F;
+        float wall_end = max_x - 0.5F;
+
+        if (wall_end - wall_start > min_gap * 2) {
+            float passage_width = min_gap;
+            float passage_start =
+                wall_start + static_cast<float>(rd() % static_cast<int>(wall_end - wall_start -
+                                                                        passage_width - 1.0F));
+            if (passage_start - wall_start > min_gap * 0.5F) {
+                internalWalls.emplace_back(wall_start, y - wall_thickness / 2,
+                                           passage_start - wall_start, wall_thickness);
             }
-            
-            float passageEnd = passageStart + passageWidth;
-            if (wallEnd - passageEnd > minGap * 0.5f) {
-                internalWalls.push_back(Rectangle(
-                    passageEnd, y - wallThickness/2, 
-                    wallEnd - passageEnd, wallThickness
-                ));
+
+            float passage_end = passage_start + passage_width;
+            if (wall_end - passage_end > min_gap * 0.5F) {
+                internalWalls.emplace_back(passage_end, y - wall_thickness / 2,
+                                           wall_end - passage_end, wall_thickness);
             }
         }
     }
-    
+
     // Vertical walls
-    for (int i = 0; i < numVerticalWalls; ++i) {
-        float x = WALL_THICKNESS + 1.0f + static_cast<float>(rd() % 
-                    static_cast<int>(WIDTH - WALL_THICKNESS * 2 - 2.0f));
-        
-        float minY = WALL_THICKNESS + 0.5f;
-        float maxY = HEIGHT - WALL_THICKNESS - 0.5f;
-        
-        float wallStart = minY + 0.5f;
-        float wallEnd = maxY - 0.5f;
-        
-        if (wallEnd - wallStart > minGap * 2) {
-            float passageWidth = minGap;
-            float passageStart = wallStart + static_cast<float>(rd() % 
-                                 static_cast<int>(wallEnd - wallStart - passageWidth - 1.0f));
-            
-            if (passageStart - wallStart > minGap * 0.5f) {
-                internalWalls.push_back(Rectangle(
-                    x - wallThickness/2, wallStart, 
-                    wallThickness, passageStart - wallStart
-                ));
+    for (int i = 0; i < num_vertical_walls; ++i) {
+        float x = wall_thickness + 1.0F +
+                  static_cast<float>(rd() % static_cast<int>(width - wall_thickness * 2 - 2.0F));
+
+        float min_y = wall_thickness + 0.5F;
+        float max_y = height - wall_thickness - 0.5F;
+
+        float wall_start = min_y + 0.5F;
+        float wall_end = max_y - 0.5F;
+        if (wall_end - wall_start > min_gap * 2) {
+            float passage_width = min_gap;
+            float passage_start =
+                wall_start + static_cast<float>(rd() % static_cast<int>(wall_end - wall_start -
+                                                                        passage_width - 1.0F));
+
+            if (passage_start - wall_start > min_gap * 0.5F) {
+                internalWalls.emplace_back(x - wall_thickness / 2, wall_start, wall_thickness,
+                                           passage_start - wall_start);
             }
-            
-            float passageEnd = passageStart + passageWidth;
-            if (wallEnd - passageEnd > minGap * 0.5f) {
-                internalWalls.push_back(Rectangle(
-                    x - wallThickness/2, passageEnd, 
-                    wallThickness, wallEnd - passageEnd
-                ));
+
+            float passage_end = passage_start + passage_width;
+            if (wall_end - passage_end > min_gap * 0.5F) {
+                internalWalls.emplace_back(x - wall_thickness / 2, passage_end, wall_thickness,
+                                           wall_end - passage_end);
             }
         }
     }
-    
-    std::cout << "Internal walls: " << internalWalls.size() 
-              << " (" << numHorizontalWalls << " H, " << numVerticalWalls << " V)" << std::endl;
+
+    std::cout << "Internal walls: " << internalWalls.size() << " (" << num_horizontal_walls
+              << " H, " << num_vertical_walls << " V)" << '\n';
 }
 
 void Map::updateGrid() {
-    float marginMeters = Robot::RADIUS;
-    int marginCells = std::max(1, static_cast<int>(marginMeters / getCellSize()));
-    
+    float margin_meters = Robot::radius;
+
     // Reset all cells to FREE
     for (auto& row : grid) {
         std::fill(row.begin(), row.end(), true);
     }
-    
-    int markedCells = 0;
-    
+
+    int marked_cells = 0;
+
     // Mark OBSTACLE cells
     for (const auto& obs : obstacles) {
-        float expX = obs.x - marginMeters;
-        float expY = obs.y - marginMeters;
-        float expW = obs.width + 2 * marginMeters;
-        float expH = obs.height + 2 * marginMeters;
-        
-        int minGx = std::max(0, worldToGridX(expX));
-        int maxGx = std::min(GRID_COLS - 1, worldToGridX(expX + expW));
-        int minGy = std::max(0, worldToGridY(expY));
-        int maxGy = std::min(GRID_ROWS - 1, worldToGridY(expY + expH));
-        
-        for (int gx = minGx; gx <= maxGx; ++gx) {
-            for (int gy = minGy; gy <= maxGy; ++gy) {
+        float exp_x = obs.x - margin_meters;
+        float exp_y = obs.y - margin_meters;
+        float exp_w = obs.width + 2 * margin_meters;
+        float exp_h = obs.height + 2 * margin_meters;
+
+        int min_gx = std::max(0, worldToGridX(exp_x));
+        int max_gx = std::min(grid_cols - 1, worldToGridX(exp_x + exp_w));
+        int min_gy = std::max(0, worldToGridY(exp_y));
+        int max_gy = std::min(grid_rows - 1, worldToGridY(exp_y + exp_h));
+
+        for (int gx = min_gx; gx <= max_gx; ++gx) {
+            for (int gy = min_gy; gy <= max_gy; ++gy) {
                 if (grid[gy][gx]) {
                     grid[gy][gx] = false;
-                    markedCells++;
+                    marked_cells++;
                 }
             }
         }
     }
-    
+
     // CRITICAL: Mark INTERNAL WALL cells
     for (const auto& wall : internalWalls) {
-        float expX = wall.x - marginMeters;
-        float expY = wall.y - marginMeters;
-        float expW = wall.width + 2 * marginMeters;
-        float expH = wall.height + 2 * marginMeters;
-        
-        int minGx = std::max(0, worldToGridX(expX));
-        int maxGx = std::min(GRID_COLS - 1, worldToGridX(expX + expW));
-        int minGy = std::max(0, worldToGridY(expY));
-        int maxGy = std::min(GRID_ROWS - 1, worldToGridY(expY + expH));
-        
-        for (int gx = minGx; gx <= maxGx; ++gx) {
-            for (int gy = minGy; gy <= maxGy; ++gy) {
+        float exp_x = wall.x - margin_meters;
+        float exp_y = wall.y - margin_meters;
+        float exp_w = wall.width + 2 * margin_meters;
+        float exp_h = wall.height + 2 * margin_meters;
+
+        int min_gx = std::max(0, worldToGridX(exp_x));
+        int max_gx = std::min(grid_cols - 1, worldToGridX(exp_x + exp_w));
+        int min_gy = std::max(0, worldToGridY(exp_y));
+        int max_gy = std::min(grid_rows - 1, worldToGridY(exp_y + exp_h));
+
+        for (int gx = min_gx; gx <= max_gx; ++gx) {
+            for (int gy = min_gy; gy <= max_gy; ++gy) {
                 if (grid[gy][gx]) {
                     grid[gy][gx] = false;
-                    markedCells++;
+                    marked_cells++;
                 }
             }
         }
     }
-    
+
     // Mark boundaries
-    for (int gx = 0; gx < GRID_COLS; ++gx) {
-        if (grid[0][gx]) { grid[0][gx] = false; markedCells++; }
-        if (grid[GRID_ROWS - 1][gx]) { grid[GRID_ROWS - 1][gx] = false; markedCells++; }
+    for (int gx = 0; gx < grid_cols; ++gx) {
+        if (grid[0][gx]) {
+            grid[0][gx] = false;
+            marked_cells++;
+        }
+        if (grid[grid_rows - 1][gx]) {
+            grid[grid_rows - 1][gx] = false;
+            marked_cells++;
+        }
     }
-    for (int gy = 0; gy < GRID_ROWS; ++gy) {
-        if (grid[gy][0]) { grid[gy][0] = false; markedCells++; }
-        if (grid[gy][GRID_COLS - 1]) { grid[gy][GRID_COLS - 1] = false; markedCells++; }
+    for (int gy = 0; gy < grid_rows; ++gy) {
+        if (grid[gy][0]) {
+            grid[gy][0] = false;
+            marked_cells++;
+        }
+        if (grid[gy][grid_cols - 1]) {
+            grid[gy][grid_cols - 1] = false;
+            marked_cells++;
+        }
     }
-    
-    std::cout << "Grid: " << markedCells << " cells marked occupied" << std::endl;
+
+    std::cout << "Grid: " << marked_cells << " cells marked occupied" << '\n';
 }
 
-int Map::worldToGridX(float x) const {
+int Map::worldToGridX(float x) {
     return static_cast<int>(x / getCellSizeX());
 }
 
-int Map::worldToGridY(float y) const {
+int Map::worldToGridY(float y) {
     return static_cast<int>(y / getCellSizeY());
 }
 
-float Map::gridToWorldX(int gx) const {
+float Map::gridToWorldX(int gx) {
     return static_cast<float>(gx) * getCellSizeX();
 }
 
-float Map::gridToWorldY(int gy) const {
+float Map::gridToWorldY(int gy) {
     return static_cast<float>(gy) * getCellSizeY();
 }
 
 bool Map::isCollision(float x, float y, float margin) const {
-    float r = Robot::RADIUS + margin;
-    
+    float r = Robot::radius + margin;
+
     for (int i = 0; i < 4; ++i) {
         if (circleRectIntersect(x, y, r, outerWalls[i].x, outerWalls[i].y,
                                 outerWalls[i].width, outerWalls[i].height)) {
             return true;
         }
     }
-    
+
     for (const auto& obs : obstacles) {
         if (circleRectIntersect(x, y, r, obs.x, obs.y, obs.width, obs.height)) {
             return true;
         }
     }
-    
-    for (const auto& wall : internalWalls) {
-        if (circleRectIntersect(x, y, r, wall.x, wall.y, wall.width, wall.height)) {
-            return true;
-        }
-    }
-    
+
+    return std::any_of(internalWalls.begin(), internalWalls.end(), [x, y, r](const auto& wall) {
+        return circleRectIntersect(x, y, r, wall.x, wall.y, wall.width, wall.height);
+    });
+
     return false;
 }
 
 bool Map::isValidPosition(float x, float y) const {
-    if (x < Robot::RADIUS || x > WIDTH - Robot::RADIUS ||
-        y < Robot::RADIUS || y > HEIGHT - Robot::RADIUS) {
+    if (x < Robot::radius || x > width - Robot::radius || y < Robot::radius ||
+        y > height - Robot::radius) {
         return false;
     }
-    
-    return !isCollision(x, y, 0.0f);
+
+    return !isCollision(x, y, 0.0F);
 }
 
 bool Map::isFreeGrid(int gx, int gy) const {
-    if (gx < 0 || gx >= GRID_COLS || gy < 0 || gy >= GRID_ROWS) {
+    if (gx < 0 || gx >= grid_cols || gy < 0 || gy >= grid_rows) {
         return false;
     }
     return grid[gy][gx];
@@ -290,14 +293,14 @@ bool Map::isFreeWorld(float x, float y) const {
 }
 
 void Map::printInfo() const {
-    std::cout << "============================================" << std::endl;
-    std::cout << "  Map Configuration" << std::endl;
-    std::cout << "============================================" << std::endl;
-    std::cout << "  Dimensions: " << WIDTH << " x " << HEIGHT << " meters" << std::endl;
-    std::cout << "  Grid: " << GRID_COLS << " x " << GRID_ROWS << " cells" << std::endl;
-    std::cout << "  Cell size: " << getCellSize() << " meters" << std::endl;
-    std::cout << "  Wall thickness: " << WALL_THICKNESS << " meters" << std::endl;
-    std::cout << "  Obstacles: " << obstacles.size() << std::endl;
-    std::cout << "  Internal walls: " << internalWalls.size() << std::endl;
-    std::cout << "============================================" << std::endl;
+    std::cout << "============================================" << '\n';
+    std::cout << "  Map Configuration" << '\n';
+    std::cout << "============================================" << '\n';
+    std::cout << "  Dimensions: " << width << " x " << height << " meters" << '\n';
+    std::cout << "  Grid: " << grid_cols << " x " << grid_rows << " cells" << '\n';
+    std::cout << "  Cell size: " << getCellSize() << " meters" << '\n';
+    std::cout << "  Wall thickness: " << wall_thickness << " meters" << '\n';
+    std::cout << "  Obstacles: " << obstacles.size() << '\n';
+    std::cout << "  Internal walls: " << internalWalls.size() << '\n';
+    std::cout << "============================================" << '\n';
 }

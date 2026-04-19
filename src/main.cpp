@@ -15,7 +15,7 @@ void printUsage(const char* programName) {
 int main(int argc, char** argv) {
     // Default algorithm
     AlgorithmType algorithm = AlgorithmType::ASTAR;
-    
+
     // Parse arguments
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--astar") == 0) {
@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
             return 1;
         }
     }
-    
+
     std::cout << "========================================\n";
     std::cout << "   Path Planning Simulation\n";
     std::cout << "========================================\n";
@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
     std::cout << "  1-4        - Switch algorithms\n";
     std::cout << "  ESC        - Exit\n";
     std::cout << "========================================\n";
-    
+
     // Create and run simulation
     try {
         Simulation sim(1200, 900);
@@ -65,9 +65,9 @@ int main(int argc, char** argv) {
         sim.initialize();
         sim.run();
     } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << "Error: " << e.what() << '\n';
         return 1;
     }
-    
+
     return 0;
 }

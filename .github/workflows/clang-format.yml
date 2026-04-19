@@ -1,0 +1,39 @@
+name: Clang Format Check
+
+on:
+  pull_request:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  clang-format:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install clang-format
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-format
+
+    - name: Check formatting
+      run: |
+        files=$(git ls-files '*.cpp' '*.h' '*.hpp' '*.cc')
+        if [ -z "$files" ]; then
+          echo "No C++ files found"
+          exit 0
+        fi
+
+        clang-format --version
+
+        diff=$(clang-format -n --Werror $files || true)
+
+        if [ -n "$diff" ]; then
+          echo "Formatting issues found:"
+          clang-format -n --Werror $files
+          exit 1
+        fi
+
+        echo "Formatting OK"

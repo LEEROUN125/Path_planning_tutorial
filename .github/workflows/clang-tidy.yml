@@ -1,0 +1,33 @@
+name: Clang Tidy
+
+on:
+  pull_request:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  clang-tidy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-tidy clang-format cmake
+
+    - name: Configure
+      run: |
+        cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+    - name: Run clang-tidy
+      run: |
+        files=$(git ls-files '*.cpp')
+
+        for file in $files; do
+          clang-tidy $file \
+            -p build \
+            --warnings-as-errors='*' \
+            || exit 1
+        done

@@ -16,6 +16,8 @@ RUN apt-get update && apt-get install -y \
     fonts-dejavu-core \
     x11-apps \
     libxext6 \
+    clang-format \
+    clang-tidy \
     libxrandr2 \
     libxfixes3 \
     libxinerama1 \

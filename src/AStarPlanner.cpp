@@ -5,10 +5,11 @@
 #include <iostream>
 
 AStarPlanner::AStarPlanner(const Map* mapPtr, const Robot* robotPtr)
-    : PathPlanner(AlgorithmType::ASTAR, mapPtr, robotPtr),
-      useDiagonalMoves(true), useDynamicWeight(false) {
+    : PathPlanner(AlgorithmType::ASTAR, mapPtr, robotPtr) {
     initializeDirections();
 }
+
+AStarPlanner::~AStarPlanner() = default;
 
 void AStarPlanner::initializeDirections() {
     directions = {
@@ -17,186 +18,185 @@ void AStarPlanner::initializeDirections() {
     };
 }
 
-float AStarPlanner::heuristic(int x, int y, int goalX, int goalY) const {
+float AStarPlanner::heuristic(int x, int y, int goalX, int goalY) {
     int dx = std::abs(x - goalX);
     int dy = std::abs(y - goalY);
     return static_cast<float>(std::min(dx, dy) * 14 + (std::max(dx, dy) - std::min(dx, dy)) * 10);
 }
 
-std::string AStarPlanner::gridKey(int x, int y) const {
+std::string AStarPlanner::gridKey(int x, int y) {
     return std::to_string(x) + "," + std::to_string(y);
 }
 
 void AStarPlanner::plan(const Pose& start, const Pose& goal) {
-    auto startTime = std::chrono::high_resolution_clock::now();
-    
+    auto start_time = std::chrono::high_resolution_clock::now();
+
     // Convert to grid coordinates
-    int startGx = map->worldToGridX(start.x);
-    int startGy = map->worldToGridY(start.y);
-    int goalGx = map->worldToGridX(goal.x);
-    int goalGy = map->worldToGridY(goal.y);
-    
-    std::cout << "\n===== A* PLANNING DEBUG =====" << std::endl;
-    std::cout << "Start: world(" << start.x << "," << start.y 
-              << ") -> grid(" << startGx << "," << startGy << ")" << std::endl;
-    std::cout << "Goal:  world(" << goal.x << "," << goal.y 
-              << ") -> grid(" << goalGx << "," << goalGy << ")" << std::endl;
-    
+    int start_gx = Map::worldToGridX(start.x);
+    int start_gy = Map::worldToGridY(start.y);
+    int goal_gx = Map::worldToGridX(goal.x);
+    int goal_gy = Map::worldToGridY(goal.y);
+
+    std::cout << "\n===== A* PLANNING DEBUG =====" << '\n';
+    std::cout << "Start: world(" << start.x << "," << start.y << ") -> grid(" << start_gx << ","
+              << start_gy << ")" << '\n';
+    std::cout << "Goal:  world(" << goal.x << "," << goal.y << ") -> grid(" << goal_gx << ","
+              << goal_gy << ")" << '\n';
+
     // Clamp to bounds
-    startGx = std::max(1, std::min(startGx, map->getGridWidth() - 2));
-    startGy = std::max(1, std::min(startGy, map->getGridHeight() - 2));
-    goalGx = std::max(1, std::min(goalGx, map->getGridWidth() - 2));
-    goalGy = std::max(1, std::min(goalGy, map->getGridHeight() - 2));
-    
+    start_gx = std::max(1, std::min(start_gx, Map::getGridWidth() - 2));
+    start_gy = std::max(1, std::min(start_gy, Map::getGridHeight() - 2));
+    goal_gx = std::max(1, std::min(goal_gx, Map::getGridWidth() - 2));
+    goal_gy = std::max(1, std::min(goal_gy, Map::getGridHeight() - 2));
+
     // Check start/goal are free
-    std::cout << "Start cell is " << (map->isFreeGrid(startGx, startGy) ? "FREE" : "BLOCKED") << std::endl;
-    std::cout << "Goal cell is " << (map->isFreeGrid(goalGx, goalGy) ? "FREE" : "BLOCKED") << std::endl;
-    
+    std::cout << "Start cell is " << (map->isFreeGrid(start_gx, start_gy) ? "FREE" : "BLOCKED")
+              << '\n';
+    std::cout << "Goal cell is " << (map->isFreeGrid(goal_gx, goal_gy) ? "FREE" : "BLOCKED")
+              << '\n';
+
     // A* algorithm
-    std::priority_queue<AStarNode> openSet;
-    std::unordered_map<std::string, AStarNode> cameFrom;
-    std::unordered_map<std::string, float> gScore;
-    
-    AStarNode startNode;
-    startNode.gx = startGx;
-    startNode.gy = startGy;
-    startNode.g = 0;
-    startNode.h = heuristic(startGx, startGy, goalGx, goalGy);
-    startNode.f = startNode.g + startNode.h;
-    startNode.parentX = -1;
-    startNode.parentY = -1;
-    
-    openSet.push(startNode);
-    gScore[gridKey(startGx, startGy)] = 0;
-    
-    int nodesExplored = 0;
+    std::priority_queue<AStarNode> open_set;
+    std::unordered_map<std::string, AStarNode> came_from;
+    std::unordered_map<std::string, float> g_score;
+
+    AStarNode start_node;
+    start_node.gx = start_gx;
+    start_node.gy = start_gy;
+    start_node.g = 0;
+    start_node.h = heuristic(start_gx, start_gy, goal_gx, goal_gy);
+    start_node.f = start_node.g + start_node.h;
+    start_node.parentX = -1;
+    start_node.parentY = -1;
+
+    open_set.push(start_node);
+    g_score[gridKey(start_gx, start_gy)] = 0;
+
+    int node_explored = 0;
     bool found = false;
-    AStarNode goalNode;
-    
-    while (!openSet.empty() && nodesExplored < 100000) {
-        AStarNode current = openSet.top();
-        openSet.pop();
-        nodesExplored++;
-        
+    AStarNode goal_node;
+
+    while (!open_set.empty() && node_explored < 100000) {
+        AStarNode current = open_set.top();
+        open_set.pop();
+        node_explored++;
+
         // Check if we reached goal
-        if (current.gx == goalGx && current.gy == goalGy) {
-            goalNode = current;
+        if (current.gx == goal_gx && current.gy == goal_gy) {
+            goal_node = current;
             found = true;
             break;
         }
-        
-        std::string currentKey = gridKey(current.gx, current.gy);
-        
+
+        std::string current_key = gridKey(current.gx, current.gy);
+
         // Skip if we already found a better path to this cell
-        if (gScore.find(currentKey) != gScore.end() && 
-            gScore[currentKey] < current.g - 0.001f) {
+        if (g_score.find(current_key) != g_score.end() &&
+            g_score[current_key] < current.g - 0.001F) {
             continue;
         }
-        
+
         // Explore neighbors
         for (const auto& dir : directions) {
             int nx = current.gx + dir.first;
             int ny = current.gy + dir.second;
-            
+
             // Bounds check
-            if (nx < 0 || nx >= map->getGridWidth() || 
-                ny < 0 || ny >= map->getGridHeight()) {
+            if (nx < 0 || nx >= Map::getGridWidth() || ny < 0 || ny >= Map::getGridHeight()) {
                 continue;
             }
-            
+
             // ===== CRITICAL: Only explore FREE cells =====
             if (!map->isFreeGrid(nx, ny)) {
                 continue;  // SKIP blocked cells!
             }
-            
+
             // Calculate cost
-            float moveCost = (dir.first != 0 && dir.second != 0) ? 14.0f : 10.0f;
-            float tentativeG = current.g + moveCost;
-            
-            std::string neighborKey = gridKey(nx, ny);
-            
+            float move_cost = (dir.first != 0 && dir.second != 0) ? 14.0F : 10.0F;
+            float tentative_g = current.g + move_cost;
+
+            std::string neighbor_key = gridKey(nx, ny);
+
             // If this path is better
-            if (gScore.find(neighborKey) == gScore.end() || 
-                tentativeG < gScore[neighborKey] - 0.001f) {
-                
-                gScore[neighborKey] = tentativeG;
-                
+            if (g_score.find(neighbor_key) == g_score.end() ||
+                tentative_g < g_score[neighbor_key] - 0.001F) {
+                g_score[neighbor_key] = tentative_g;
+
                 AStarNode neighbor;
                 neighbor.gx = nx;
                 neighbor.gy = ny;
                 neighbor.parentX = current.gx;
                 neighbor.parentY = current.gy;
-                neighbor.g = tentativeG;
-                neighbor.h = heuristic(nx, ny, goalGx, goalGy);
+                neighbor.g = tentative_g;
+                neighbor.h = heuristic(nx, ny, goal_gx, goal_gy);
                 neighbor.f = neighbor.g + neighbor.h;
-                
-                openSet.push(neighbor);
-                cameFrom[neighborKey] = neighbor;
+
+                open_set.push(neighbor);
+                came_from[neighbor_key] = neighbor;
             }
         }
     }
-    
-    std::cout << "Nodes explored: " << nodesExplored << std::endl;
-    
+
+    std::cout << "Nodes explored: " << node_explored << '\n';
+
     // Reconstruct path
     if (found) {
-        std::cout << "Path found! Reconstructing..." << std::endl;
-        
+        std::cout << "Path found! Reconstructing..." << '\n';
+
         plannedPath.clear();
         groundTruthPath.clear();
-        
+
         // Build path from goal to start
-        std::vector<std::pair<int, int>> reversePath;
-        reversePath.push_back({goalNode.gx, goalNode.gy});
-        
-        std::string key = gridKey(goalNode.gx, goalNode.gy);
-        
+        std::vector<std::pair<int, int>> reverse_path;
+        reverse_path.emplace_back(goal_node.gx, goal_node.gy);
+
+        std::string key = gridKey(goal_node.gx, goal_node.gy);
+
         // Trace back
-        while (cameFrom.find(key) != cameFrom.end()) {
-            const AStarNode& node = cameFrom.at(key);
-            reversePath.push_back({node.parentX, node.parentY});
+        while (came_from.find(key) != came_from.end()) {
+            const AStarNode& node = came_from.at(key);
+            reverse_path.emplace_back(node.parentX, node.parentY);
             key = gridKey(node.parentX, node.parentY);
         }
-        
+
         // Reverse to get start to goal
-        std::reverse(reversePath.begin(), reversePath.end());
-        
-        std::cout << "Raw path has " << reversePath.size() << " cells" << std::endl;
-        
+        std::reverse(reverse_path.begin(), reverse_path.end());
+
+        std::cout << "Raw path has " << reverse_path.size() << " cells" << '\n';
+
         // ===== CRITICAL: Validate EVERY cell =====
-        int blockedInPath = 0;
-        int skippedCells = 0;
-        
-        for (size_t i = 0; i < reversePath.size(); ++i) {
-            const auto& cell = reversePath[i];
+        int blocked_in_path = 0;
+        int skipped_cells = 0;
+
+        for (const auto& cell : reverse_path) {
             int gx = cell.first;
             int gy = cell.second;
-            
+
             // Check if cell is FREE
             if (!map->isFreeGrid(gx, gy)) {
-                blockedInPath++;
-                std::cerr << "ERROR: Cell (" << gx << "," << gy 
-                          << ") is BLOCKED but in path!" << std::endl;
-                skippedCells++;
+                blocked_in_path++;
+                std::cerr << "ERROR: Cell (" << gx << "," << gy << ") is BLOCKED but in path!"
+                          << '\n';
+                skipped_cells++;
                 continue;  // SKIP this cell
             }
-            
+
             // Convert to world
             PathPoint pt;
-            pt.x = map->gridToWorldX(gx) + map->getCellSize() / 2.0f;
-            pt.y = map->gridToWorldY(gy) + map->getCellSize() / 2.0f;
+            pt.x = Map::gridToWorldX(gx) + Map::getCellSize() / 2.0F;
+            pt.y = Map::gridToWorldY(gy) + Map::getCellSize() / 2.0F;
             pt.cost = 0;
             pt.theta = 0;
-            
+
             plannedPath.push_back(pt);
         }
-        
-        std::cout << "Blocked cells in path: " << blockedInPath << std::endl;
-        std::cout << "Final path has " << plannedPath.size() << " waypoints" << std::endl;
-        
+
+        std::cout << "Blocked cells in path: " << blocked_in_path << '\n';
+        std::cout << "Final path has " << plannedPath.size() << " waypoints" << '\n';
+
         groundTruthPath = plannedPath;
         pathCost = calculatePathLength(plannedPath);
-        
+
         // Calculate theta for each waypoint based on next point
         for (size_t i = 0; i < plannedPath.size(); ++i) {
             if (i < plannedPath.size() - 1) {
@@ -205,28 +205,29 @@ void AStarPlanner::plan(const Pose& start, const Pose& goal) {
                 plannedPath[i].theta = std::atan2(-dy, dx);
             }
         }
-        
+
     } else {
-        std::cerr << "ERROR: No path found!" << std::endl;
+        std::cerr << "ERROR: No path found!" << '\n';
         plannedPath.clear();
         groundTruthPath.clear();
         pathCost = std::numeric_limits<float>::infinity();
     }
-    
-    auto endTime = std::chrono::high_resolution_clock::now();
-    planningTimeMs = std::chrono::duration<float, std::milli>(endTime - startTime).count();
-    
-    std::cout << "Planning time: " << planningTimeMs << " ms" << std::endl;
-    std::cout << "===== A* DONE =====\n" << std::endl;
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    planningTimeMs = std::chrono::duration<float, std::milli>(end_time - start_time).count();
+
+    std::cout << "Planning time: " << planningTimeMs << " ms" << '\n';
+    std::cout << "===== A* DONE =====\n" << '\n';
 }
 
 void AStarPlanner::replan(const Pose& newGoal) {
     // Get current robot position as start
-    Pose currentStart = Pose(1.5f, 1.5f, 0.0f);
+    Pose current_start = Pose(1.5F, 1.5F, 0.0F);
+    // NOLINTNEXTLINE(readability-implicit-bool-conversion)
     if (robot) {
-        currentStart = robot->getPose();
+        current_start = robot->getPose();
     }
-    
+
     // Re-run planning from current position to new goal
-    plan(currentStart, newGoal);
+    plan(current_start, newGoal);
 }

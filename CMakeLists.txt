@@ -8,6 +8,26 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Export compile commands (for clang-tidy, clangd)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Enable clang-tidy (optional toggle)
+option(ENABLE_CLANG_TIDY "Enable clang-tidy" ON)
+
+if(ENABLE_CLANG_TIDY)
+    find_program(CLANG_TIDY_EXE NAMES clang-tidy-18 clang-tidy-17 clang-tidy-16 clang-tidy-15 clang-tidy-14 clang-tidy-13 clang-tidy-12 clang-tidy)
+
+    if(CLANG_TIDY_EXE)
+        message(STATUS "clang-tidy found: ${CLANG_TIDY_EXE}")
+        set(CMAKE_CXX_CLANG_TIDY
+            ${CLANG_TIDY_EXE};
+            --config-file=${CMAKE_SOURCE_DIR}/.clang-tidy
+        )
+    else()
+        message(WARNING "clang-tidy not found.")
+    endif()
+endif()
+
 # Output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
