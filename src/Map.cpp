@@ -9,21 +9,24 @@ float Map::height = 10.0F;
 
 // ===== Circle-Rectangle collision =====
 namespace {
-    bool circleRectIntersect(float cx, float cy, float r,
-                             float rx, float ry, float rw, float rh) {
-        float closest_x = std::max(rx, std::min(cx, rx + rw));
-        float closest_y = std::max(ry, std::min(cy, ry + rh));
-        float dx = cx - closest_x;
-        float dy = cy - closest_y;
-        return (dx * dx + dy * dy) < (r * r);
-    }
+bool circleRectIntersect(float cx, float cy, float r, float rx, float ry, float rw, float rh) {
+    float closest_x = std::max(rx, std::min(cx, rx + rw));
+    float closest_y = std::max(ry, std::min(cy, ry + rh));
+    float dx = cx - closest_x;
+    float dy = cy - closest_y;
+    return (dx * dx + dy * dy) < (r * r);
 }
+}  // namespace
 
 Map::Map(int maxObs) : maxObstacles(maxObs) {
     initialize();
 }
 
 void Map::initialize() {
+    // Initialize function : Setup the map with outer walls
+    // Call generateRandomObstacles() and generateInternalWalls() to populate the map
+    // Update the grid representation after setting up the map
+
     // Outer walls
     outerWalls[0] = Rectangle(0, 0, width, wall_thickness);
     outerWalls[1] = Rectangle(0, height - wall_thickness, width, wall_thickness);
@@ -41,28 +44,35 @@ void Map::initialize() {
 void Map::generateRandomObstacles() {
     obstacles.clear();
 
+    // Setup random generator
     std::random_device rd;
     std::mt19937 gen(rd());
 
+    // Set obstacle size based on robot dimensions (can be adjusted)
     float obs_width = Robot::length * 1.0F;
     float obs_height = Robot::width * 1.0F;
 
+    // Set number of obstacles randomly between 3 and maxObstacles
     std::uniform_int_distribution<> num_dist(3, maxObstacles);
     int num_obstacles = num_dist(gen);
 
-    float margin = wall_thickness + 0.5F;
+    // Margin to ensure obstacles are not too close to walls (in meters)
+    float margin = wall_thickness + 1.0F;
 
     for (int i = 0; i < num_obstacles; ++i) {
         bool valid = false;
         int attempts = 0;
 
+        // Iteratively try to place an obstacle without overlapping existing ones or walls
         while (!valid && attempts < 100) {
             std::uniform_real_distribution<float> x_dist(margin, width - margin - obs_width);
             std::uniform_real_distribution<float> y_dist(margin, height - margin - obs_height);
 
+            // Make candidate with random x, y and fixed size
             Rectangle candidate(x_dist(gen), y_dist(gen), obs_width, obs_height);
 
             valid = true;
+            // Check if candidate intersects with any existing obstacle
             for (const auto& existing : obstacles) {
                 if (candidate.intersects(existing)) {
                     valid = false;
@@ -70,6 +80,7 @@ void Map::generateRandomObstacles() {
                 }
             }
 
+            // Push into obstacles if valid and does not collide with outer walls (with margin)
             if (valid) {
                 obstacles.push_back(candidate);
             }
@@ -80,8 +91,12 @@ void Map::generateRandomObstacles() {
 
 void Map::generateInternalWalls() {
     internalWalls.clear();
+
+    // Setup random generator
     std::random_device rd;
     std::mt19937 gen(rd());
+
+    // Ensure map is large enough to accommodate internal walls with margins
     if (width < 4.0F || height < 4.0F) {
         std::cerr << "Map too small for internal walls\n";
         return;
@@ -90,14 +105,17 @@ void Map::generateInternalWalls() {
     // 1-2 walls of each type (reduced from before)
     int num_horizontal_walls = static_cast<int>(1 + (rd() % 2));
     int num_vertical_walls = static_cast<int>(1 + (rd() % 2));
-    float wall_thickness = 0.15F;
-    float min_gap = 1.2F;
+    float wall_thickness = 0.15F;  // The thickness of internal walls (meters)
+    float min_gap = 1.2F;          // Minimum gap for robot to pass (meters)
+
     // Horizontal walls
-    float available_height = height - 2 * wall_thickness - 2.0F;
+    float available_height = height - 2 * wall_thickness - 2.0F;  // Margin of 1m on top and bottom
+
     if (available_height <= 0.0F) {
         std::cerr << "Not enough vertical space for internal walls\n";
         return;
     }
+
     for (int i = 0; i < num_horizontal_walls; ++i) {
         float y = wall_thickness + 1.0F +
                   static_cast<float>(
@@ -123,6 +141,7 @@ void Map::generateInternalWalls() {
             }
         }
     }
+
     // Vertical walls
     float available_width = width - 2 * wall_thickness - 2.0F;
     if (available_width <= 0.0F) {
@@ -131,8 +150,8 @@ void Map::generateInternalWalls() {
     }
     for (int i = 0; i < num_vertical_walls; ++i) {
         float x = wall_thickness + 1.0F +
-                  static_cast<float>(rd() % std::max(1, static_cast<int>(  // ✅ FIXED
-                                                            width - wall_thickness * 2 - 2.0F)));
+                  static_cast<float>(
+                      rd() % std::max(1, static_cast<int>(width - wall_thickness * 2 - 2.0F)));
         float min_y = wall_thickness + 0.5F;
         float max_y = height - wall_thickness - 0.5F;
         float wall_start = min_y + 0.5F;
@@ -159,7 +178,8 @@ void Map::generateInternalWalls() {
 }
 
 void Map::updateGrid() {
-    float safety_padding = 0.15F;  // Extra padding to ensure safety
+    // Safety padding will be added into margin meters that expands the obstacles when considering collision of the robot.
+    float safety_padding = 0.01F;  // Extra padding to ensure safety
     float margin_meters = Robot::radius + safety_padding;
 
     // Reset all cells to FREE
@@ -171,16 +191,21 @@ void Map::updateGrid() {
 
     // Mark OBSTACLE cells
     for (const auto& obs : obstacles) {
+        // Expand the obstacle (virtually) by the margin to account for robot's radius and safety padding
         float exp_x = obs.x - margin_meters;
         float exp_y = obs.y - margin_meters;
         float exp_w = obs.width + 2 * margin_meters;
         float exp_h = obs.height + 2 * margin_meters;
 
+        // Convert meters to grid coordinates and clamp to grid bounds
+        // worldToGridX/Y converts real-world coordinates to grid indices.
+        // Using min/max to ensure we don't go out of bounds of the grid array.
         int min_gx = std::max(0, worldToGridX(exp_x));
         int max_gx = std::min(grid_cols - 1, worldToGridX(exp_x + exp_w));
         int min_gy = std::max(0, worldToGridY(exp_y));
         int max_gy = std::min(grid_rows - 1, worldToGridY(exp_y + exp_h));
 
+        // Mark the cells covered by the expanded obstacle as occupied (false)
         for (int gx = min_gx; gx <= max_gx; ++gx) {
             for (int gy = min_gy; gy <= max_gy; ++gy) {
                 if (grid[gy][gx]) {
@@ -191,12 +216,17 @@ void Map::updateGrid() {
         }
     }
 
+    // Mark internal walls with margin
     for (const auto& wall : internalWalls) {
+        // Expand the wall (virtually) by the margin to account for robot's radius and safety padding
         float exp_x = wall.x - margin_meters;
         float exp_y = wall.y - margin_meters;
         float exp_w = wall.width + 2 * margin_meters;
         float exp_h = wall.height + 2 * margin_meters;
 
+        // Convert meters to grid coordinates and clamp to grid bounds
+        // worldToGridX/Y converts real-world coordinates to grid indices.
+        // Using min/max to ensure we don't go out of bounds of the grid array.
         int min_gx = std::max(0, worldToGridX(exp_x));
         int max_gx = std::min(grid_cols - 1, worldToGridX(exp_x + exp_w));
         int min_gy = std::max(0, worldToGridY(exp_y));
@@ -212,7 +242,7 @@ void Map::updateGrid() {
         }
     }
 
-    // Mark boundaries
+    // Mark boundaries, outer walls with margin
     for (int gx = 0; gx < grid_cols; ++gx) {
         if (grid[0][gx]) {
             grid[0][gx] = false;
@@ -237,6 +267,7 @@ void Map::updateGrid() {
     std::cout << "Grid: " << marked_cells << " cells marked occupied" << '\n';
 }
 
+// ===== Coordinate conversions and collision checks =====
 int Map::worldToGridX(float x) {
     return static_cast<int>(x / getCellSizeX());
 }
@@ -253,22 +284,30 @@ float Map::gridToWorldY(int gy) {
     return static_cast<float>(gy) * getCellSizeY();
 }
 
+// =======================================================
+
 bool Map::isCollision(float x, float y, float margin) const {
+    // Check if all of obstacles and walls are collided with a circle of radius (Robot::radius + margin)
+    // centered at (x, y). Default margin is 0.
+
     float r = Robot::radius + margin;
 
+    // Check with outer walls
     for (int i = 0; i < 4; ++i) {
-        if (circleRectIntersect(x, y, r, outerWalls[i].x, outerWalls[i].y,
-                                outerWalls[i].width, outerWalls[i].height)) {
+        if (circleRectIntersect(x, y, r, outerWalls[i].x, outerWalls[i].y, outerWalls[i].width,
+                                outerWalls[i].height)) {
             return true;
         }
     }
 
+    // Check with obstacles
     for (const auto& obs : obstacles) {
         if (circleRectIntersect(x, y, r, obs.x, obs.y, obs.width, obs.height)) {
             return true;
         }
     }
 
+    // Check with internal walls
     return std::any_of(internalWalls.begin(), internalWalls.end(), [x, y, r](const auto& wall) {
         return circleRectIntersect(x, y, r, wall.x, wall.y, wall.width, wall.height);
     });
@@ -277,6 +316,8 @@ bool Map::isCollision(float x, float y, float margin) const {
 }
 
 bool Map::isValidPosition(float x, float y) const {
+    // Check if (x, y) is within map bounds considering robot's radius to avoid collisions with walls
+    // This funtion is used in Simulation::update, to check if the robot is crahsed.
     if (x < Robot::radius || x > width - Robot::radius || y < Robot::radius ||
         y > height - Robot::radius) {
         return false;
